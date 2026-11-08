@@ -33,7 +33,11 @@
   const HAT_TIP = 20;           // length of the floppy part, CSS px (longer = movement swings it less)
   const HAT_STEP = 0.24;        // extra side-to-side sway per walking step, radians
   const NAME_LIFT = 18;         // on Floor 2, name tags move up this far to make room for hats
-  const IDLE_NAP = 9;           // seconds before the cat curls up
+  const IDLE_NAP = 9;           // seconds before the cat goes off for a nap
+  const NAP_PACE = 0.55;        // its sleepy walk to the nap spot, as a share of SPEED
+  const NAP_WARM = ['diyas-sofa', 'diya-reading', 'diyas-beanbag', 'rangoli']; // Floor 1's warm spots on the floor (the rangoli has sparklers)
+  const BODY_X = 14, BODY_Y = 4; // room the cat's body needs beside furniture, CSS px
+  const PEEK_R = 150;           // a sleeping cat opens one eye when someone walks this close
   const COAT = { fur: '#d98a45', stripe: '#a9581f', belly: '#f4e2c4', ear: '#e29b93', eye: '#b7b445', nose: '#d27378' }; // orange tabby
 
   // Christmas versions of the page's own skin tokens (the page sets these inline on <main>).
@@ -75,8 +79,8 @@
     onMat: false, entering: 0, snowAmt: 0, drift: 0, gustT: 2,
     padA: false, padB: false, padX: false, padLabel: null, sound: true
   };
-  const cat = { x: 0, y: 0, top: -44, dir: 'up', walk: false, phase: 0, blink: 0, blinkT: 3, hop: 0, idle: 0, sleeping: false, lastPrint: null, printSide: 1 };
-  const A = { card: null, rawCard: null, mat: null, arcade: null, tree: null, rangoliEls: [], lightY: 76, windows: [] };
+  const cat = { x: 0, y: 0, top: -44, dir: 'up', walk: false, phase: 0, blink: 0, blinkT: 3, hop: 0, idle: 0, sleeping: false, nap: null, peek: 0, peekT: 0, lastPrint: null, printSide: 1 };
+  const A = { card: null, rawCard: null, mat: null, arcade: null, tree: null, rangoliEls: [], lightY: 76, windows: [], furniture: [], obstacles: [] };
   const keys = new Set();
   const flakes = [], gusts = [], prints = [], bubbles = [];
   const lastPeople = new Map();
@@ -197,6 +201,106 @@
       A.tree = { x: A.rawCard.x - 100, y: A.rawCard.y + A.rawCard.h * 0.82 };
       A.rangoliEls = [];
     }
+    A.furniture = findFurniture();
+    A.obstacles = findObstacles();
+  }
+
+  // ---------------------------------------------------------------- furniture
+  // The cat walks round the furniture instead of through it. The page draws every piece as an <img>:
+  // the props (sofas, tables, chairs, the desk, plants, lamps, shelves), the pets, and the low walls
+  // along the front. Each image is scanned once for its solid pixels (faint shadows don't count) and
+  // described as up to four stacked boxes that follow its shape, so the cat stops at a piece's real
+  // edge, not at its transparent box: a wall and the post above it, a lamp's shade and its pole.
+  // Rugs, the rangoli and the floor signs aren't props, so the cat still walks over those.
+  const solidShapes = new Map();
+  function solidShape(url) {
+    const hit = solidShapes.get(url);
+    if (hit !== undefined) return hit === 'pending' ? null : hit;
+    solidShapes.set(url, 'pending');
+    fetch(url, { mode: 'cors', credentials: 'omit' })
+      .then(r => (r.ok ? r.blob() : Promise.reject(new Error(String(r.status)))))
+      .then(blob => createImageBitmap(blob))
+      .then(bm => solidShapes.set(url, shapeOf(bm)))
+      .catch(() => solidShapes.set(url, null));
+    return null;
+  }
+  function shapeOf(bm) {
+    const w = bm.width, h = bm.height;
+    const c = new OffscreenCanvas(w, h), g = c.getContext('2d');
+    g.drawImage(bm, 0, 0);
+    const d = g.getImageData(0, 0, w, h).data;
+    // each row's solid extent, then runs of rows with about the same extent become one box
+    const tol = w * 0.08 + 2, bands = [];
+    let cur = null;
+    for (let y = 0; y < h; y++) {
+      let l = -1, r = -1, n = 0;
+      for (let x = 0; x < w; x++) if (d[(y * w + x) * 4 + 3] > 100) { if (l < 0) l = x; r = x; n++; }
+      if (n < 2) { cur = null; continue; }
+      if (cur && Math.abs(l - cur.l) < tol && Math.abs(r + 1 - cur.r) < tol) {
+        cur.l = Math.min(cur.l, l); cur.r = Math.max(cur.r, r + 1); cur.b = y + 1;
+      } else bands.push((cur = { l, r: r + 1, t: y, b: y + 1 }));
+    }
+    if (!bands.length) return null;
+    // at most four: keep merging the two neighbours that add the least empty area
+    while (bands.length > 4) {
+      let best = 0, cost = Infinity;
+      for (let i = 0; i < bands.length - 1; i++) {
+        const a = bands[i], b = bands[i + 1];
+        const merged = (Math.max(a.r, b.r) - Math.min(a.l, b.l)) * (b.b - a.t);
+        const k = merged - (a.r - a.l) * (a.b - a.t) - (b.r - b.l) * (b.b - b.t);
+        if (k < cost) { cost = k; best = i; }
+      }
+      const a = bands[best], b = bands[best + 1];
+      bands.splice(best, 2, { l: Math.min(a.l, b.l), r: Math.max(a.r, b.r), t: a.t, b: b.b });
+    }
+    return bands.map(b => ({ l: b.l / w, r: b.r / w, t: b.t / h, b: b.b / h }));
+  }
+  // Where the picture actually sits inside an <img>'s box (the page uses object-fit: contain for some).
+  function drawnRect(el, r) {
+    const cs = getComputedStyle(el), nw = el.naturalWidth, nh = el.naturalHeight;
+    if (!nw || !nh || (cs.objectFit !== 'contain' && cs.objectFit !== 'scale-down')) return r;
+    const s = Math.min(r.w / nw, r.h / nh, cs.objectFit === 'scale-down' ? 1 : Infinity);
+    const w = nw * s, h = nh * s;
+    const at = (v, room) => (/%$/.test(v) ? (parseFloat(v) / 100) * room : /px$/.test(v) ? parseFloat(v) : room / 2);
+    const [px = '50%', py = '50%'] = cs.objectPosition.split(' ');
+    return { x: r.x + at(px, r.w - w), y: r.y + at(py, r.h - h), w, h };
+  }
+  function findFurniture() {
+    const st = stageEl();
+    if (!st) return [];
+    const out = [];
+    for (const el of st.querySelectorAll('img[class*="_prop"], [class*="_prop"] > img, [class*="_frontWalls"] img')) {
+      if (el.dataset.skinDecor || el.closest('.office-hiring, [class*="_walker"]')) continue;
+      const r0 = el.getBoundingClientRect();
+      if (r0.width < 12 || r0.height < 12 || r0.bottom < 0 || r0.top > innerHeight) continue;
+      const shape = solidShape(el.currentSrc || el.src);
+      if (!shape) continue;
+      const c = drawnRect(el, toRect(r0));
+      // the page mirrors some pieces (the right-hand wall) and turns some round (chairs facing away)
+      const m = getComputedStyle(el).transform.match(/^matrix\(([^,]+),[^,]+,[^,]+,([^,]+),/);
+      const fx = m && parseFloat(m[1]) < -0.5, fy = m && parseFloat(m[2]) < -0.5;
+      const boxes = shape.map(p => {
+        const l = fx ? 1 - p.r : p.l, r = fx ? 1 - p.l : p.r, t = fy ? 1 - p.b : p.t, b = fy ? 1 - p.t : p.b;
+        return { x: c.x + l * c.w, y: c.y + t * c.h, w: (r - l) * c.w, h: (b - t) * c.h };
+      });
+      const top = Math.min(...boxes.map(b => b.y)), bottom = Math.max(...boxes.map(b => b.y + b.h));
+      const width = Math.max(...boxes.map(b => b.x + b.w)) - Math.min(...boxes.map(b => b.x)), height = bottom - top;
+      // tall, narrow pieces (plants, lamps, the arcade) only block at their base, so the cat can pass behind the top
+      const footY = height > width * 1.2 ? bottom - Math.min(height, Math.max(width * 0.6, 26)) : top;
+      for (const b of boxes) {
+        const y0 = Math.max(b.y, footY);
+        if (b.w >= 6 && b.y + b.h - y0 >= 3) out.push({ x: b.x, y: y0, w: b.w, h: b.y + b.h - y0 });
+      }
+    }
+    return out;
+  }
+  // Everywhere the cat can't stand: the hiring card, the furniture (padded for the cat's body), and on
+  // Floor 2 the tree with its presents.
+  function findObstacles() {
+    const out = [A.card];
+    for (const f of A.furniture) out.push({ x: f.x - BODY_X, y: f.y - BODY_Y, w: f.w + 2 * BODY_X, h: f.h + 2 * BODY_Y });
+    if (S.xmas && A.tree) out.push({ x: A.tree.x - 76 - BODY_X, y: A.tree.y - 30, w: 144 + 2 * BODY_X, h: 46 + BODY_Y });
+    return out;
   }
 
   // Where a teammate's head is, read from the frame of their own sprite the page is showing.
@@ -617,12 +721,117 @@
     locate();
     cat.x = A.mat.x + A.mat.w / 2;
     cat.y = A.mat.y + A.mat.h - 10;
-    cat.dir = 'up'; cat.sleeping = false; cat.idle = 0; cat.hop = 0;
+    cat.dir = 'up'; cat.sleeping = false; cat.idle = 0; cat.hop = 0; cat.nap = null;
     S.onMat = true; S.entering = 0.75;
   }
-  const blocked = (x, y) => inRect(x, y, A.card);
+  // Would (x, y) put the cat inside something? If it's already inside (say the layout just moved), it
+  // may walk out.
+  function blocked(x, y) {
+    for (const r of A.obstacles) if (inRect(x, y, r) && !inRect(cat.x, cat.y, r)) return true;
+    return false;
+  }
+
+  // ---------------------------------------------------------------- naps
+  // Left alone, the cat takes itself off to the warmest spot it can reach and curls up there: the
+  // nearest diyas on Floor 1 (the ones on the floor, not on tables), the foot of the tree on Floor 2.
+  // It goes round the hiring card and never steps on the doormat, so it can't ride the elevator alone.
+  function napSpots() {
+    if (S.xmas) return A.tree ? [{ x: A.tree.x, y: A.tree.y + 34 }] : []; // curled up in front of the presents
+    const out = [];
+    for (const id of NAP_WARM) {
+      const el = $(`img[data-skin-decor="${id}"]`);
+      const r = el && el.getBoundingClientRect();
+      if (!r || r.width < 4 || el.style.visibility === 'hidden') continue;
+      // beside it, facing the flame, or just in front; the rangoli lies flat, so beside its middle
+      const y = id === 'rangoli' ? r.top + r.height * 0.62 : r.bottom - 2;
+      out.push({ x: r.left - 22, y, face: 'right' }, { x: r.right + 22, y, face: 'left' }, { x: r.left + r.width / 2, y: r.bottom + 16 });
+    }
+    return out;
+  }
+  const napMinY = () => A.lightY + 22;
+  function walkable(x, y, obs) {
+    return x >= 18 && x <= innerWidth - 18 && y >= napMinY() && y <= innerHeight - 4 && !obs.some(r => inRect(x, y, r));
+  }
+  // Does the line from a to b pass through rectangle r? (Just touching an edge doesn't count.)
+  function segHits(a, b, r) {
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const p = [-dx, dx, -dy, dy], q = [a.x - r.x, r.x + r.w - a.x, a.y - r.y, r.y + r.h - a.y];
+    let t0 = 0, t1 = 1;
+    for (let i = 0; i < 4; i++) {
+      if (p[i] === 0) { if (q[i] <= 0) return false; continue; }
+      const t = q[i] / p[i];
+      if (p[i] < 0) { if (t > t0) t0 = t; } else if (t < t1) t1 = t;
+      if (t0 >= t1) return false;
+    }
+    return true;
+  }
+  // Is the straight line from a to b clear? Anything a is already inside is ignored, so a cat standing
+  // close to the furniture can still walk away from it.
+  function clearLine(a, b, obs) {
+    for (const r of obs) if (!inRect(a.x, a.y, r) && segHits(a, b, r)) return false;
+    return true;
+  }
+  // The shortest walk to the nearest of the targets: straight lines that turn only at the corners of
+  // the obstacles. Returns { path, len, target } or null if none can be reached.
+  function route(from, targets, obs) {
+    const nodes = [from, ...targets];
+    for (const r of obs) {
+      for (const [x, y] of [[r.x - 3, r.y - 3], [r.x + r.w + 3, r.y - 3], [r.x - 3, r.y + r.h + 3], [r.x + r.w + 3, r.y + r.h + 3]]) {
+        if (walkable(x, y, obs)) nodes.push({ x, y });
+      }
+    }
+    const dist = nodes.map(() => Infinity), prev = nodes.map(() => -1), done = nodes.map(() => false);
+    dist[0] = 0;
+    for (;;) {
+      let u = -1;
+      for (let i = 0; i < nodes.length; i++) if (!done[i] && dist[i] < Infinity && (u < 0 || dist[i] < dist[u])) u = i;
+      if (u < 0) return null;
+      if (u >= 1 && u <= targets.length) {
+        const path = [];
+        for (let i = u; i > 0; i = prev[i]) path.unshift({ x: nodes[i].x, y: nodes[i].y });
+        return { path, len: dist[u], target: targets[u - 1] };
+      }
+      done[u] = true;
+      for (let v = 1; v < nodes.length; v++) {
+        if (done[v]) continue;
+        const d = dist[u] + Math.hypot(nodes[v].x - nodes[u].x, nodes[v].y - nodes[u].y);
+        if (d < dist[v] && clearLine(nodes[u], nodes[v], obs)) { dist[v] = d; prev[v] = u; }
+      }
+    }
+  }
+  function goNap() {
+    // the card and the furniture, and a wide berth round the doormat
+    const obs = [inflate(A.card, 4), ...A.obstacles.slice(1)];
+    if (A.mat) obs.push(inflate(A.mat, 14));
+    // where it lies needs room for its whole body (about 40 px wide)
+    const room = [inflate(A.card, 26), ...A.obstacles.slice(1).map(r => inflate(r, 4)), ...(A.mat ? [inflate(A.mat, 24)] : [])];
+    const spots = napSpots().filter(s => walkable(s.x, s.y, room));
+    const best = spots.length ? route({ x: cat.x, y: cat.y }, spots, obs) : null;
+    if (best && best.len > 16) {
+      cat.nap = { path: best.path, face: best.target.face, stuck: 0 };
+      say('cat', 'yawn…', 1300);
+    } else curlUp(best && best.target.face);
+  }
+  function curlUp(face) {
+    cat.nap = null;
+    if (face) cat.dir = face;
+    cat.sleeping = true;
+    say('cat', 'zzz…', 1800);
+  }
+  // While it sleeps, it opens one eye when someone walks past, and looks their way.
+  function updatePeek(people, dt) {
+    if (!cat.sleeping) { cat.peek = 0; cat.peekT = 0; return; }
+    let side = 0;
+    for (const p of people) {
+      if (p.walking && Math.hypot(p.cx - cat.x, p.feetY - cat.y) < PEEK_R) { side = p.cx < cat.x ? -1 : 1; break; }
+    }
+    if (side) { cat.peek = side; cat.peekT = 0.8; }
+    else if ((cat.peekT -= dt) <= 0) cat.peek = 0;
+  }
+
   function interact() {
     if (S.trans || S.arcade) return;
+    cat.nap = null;
     if (cat.sleeping) { cat.sleeping = false; cat.idle = 0; say('cat', '…mrrp?', 900); return; }
     const t = findTarget(readPeople());
     if (t && t.type === 'arcade') { openArcade(); return; }
@@ -639,22 +848,38 @@
   function updateCat(dt, pad) {
     let dx = (keys.has('r') ? 1 : 0) - (keys.has('l') ? 1 : 0) + pad.x;
     let dy = (keys.has('d') ? 1 : 0) - (keys.has('u') ? 1 : 0) + pad.y;
+    let pace = 1;
     // Hold still while the elevator doors are shut, then walk in off the doormat.
-    if (S.trans) { dx = 0; dy = 0; }
+    if (S.trans) { dx = 0; dy = 0; cat.nap = null; }
     else if (S.entering > 0) { S.entering -= dt; dx = 0; dy = -1; }
+    else if (Math.hypot(dx, dy) > 0.1) cat.nap = null; // you took over
+    else if (cat.nap) {
+      // a sleepy walk along the route to the nap spot
+      const p = cat.nap.path[0];
+      const d = Math.hypot(p.x - cat.x, p.y - cat.y);
+      if (d < 4) { cat.nap.path.shift(); if (!cat.nap.path.length) curlUp(cat.nap.face); }
+      else { dx = (p.x - cat.x) / d; dy = (p.y - cat.y) / d; pace = NAP_PACE; }
+    }
     const m = Math.hypot(dx, dy);
     const moving = m > 0.1;
     if (moving) {
       if (cat.sleeping) { cat.sleeping = false; }
       dx /= Math.max(1, m); dy /= Math.max(1, m);
       const minY = A.lightY + 22;
-      const nx = clamp(cat.x + dx * SPEED * dt, 18, innerWidth - 18);
-      const ny = clamp(cat.y + dy * SPEED * dt, minY, innerHeight - 4);
+      const ox = cat.x, oy = cat.y;
+      const nx = clamp(cat.x + dx * SPEED * pace * dt, 18, innerWidth - 18);
+      const ny = clamp(cat.y + dy * SPEED * pace * dt, minY, innerHeight - 4);
+      if (cat.nap && A.mat && inRect(nx, ny, A.mat, 4)) { curlUp(); return; } // never onto the doormat by itself
       if (!blocked(nx, cat.y)) cat.x = nx;
       if (!blocked(cat.x, ny)) cat.y = ny;
+      // if something stops it on the way, it gives up and sleeps where it is
+      if (cat.nap) {
+        cat.nap.stuck = Math.hypot(cat.x - ox, cat.y - oy) < SPEED * pace * dt * 0.3 ? cat.nap.stuck + dt : 0;
+        if (cat.nap.stuck > 1) { curlUp(); return; }
+      }
       cat.dir = Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down');
       const before = Math.floor(cat.phase / Math.PI);
-      cat.phase += dt * STRIDE_RATE;
+      cat.phase += dt * STRIDE_RATE * (pace < 1 ? 0.7 : 1); // a slower stride for the sleepy walk
       if (Math.floor(cat.phase / Math.PI) !== before && S.xmas) sfx.step();
       cat.idle = 0;
       revealAround(cat.x, cat.y);
@@ -662,7 +887,7 @@
     } else {
       cat.phase = 0;
       cat.idle += dt;
-      if (cat.idle > IDLE_NAP && !cat.sleeping && !S.arcade) { cat.sleeping = true; say('cat', 'zzz…', 1800); }
+      if (cat.idle > IDLE_NAP && !cat.sleeping && !cat.nap && !S.arcade) goNap();
     }
     cat.walk = moving;
     cat.hop = Math.max(0, cat.hop - dt * 26);
@@ -778,7 +1003,7 @@
       sctx.setTransform(CS, 0, 0, CS, 0, 0);
       const r = drawCat(sctx, Math.round((cat.x * DPR) / CS), Math.round((cat.y * DPR) / CS), {
         dir: cat.dir, walk: cat.walk, phase: cat.phase, idle: cat.idle, time: S.t, blink: cat.blink,
-        hop: cat.hop, sleeping: cat.sleeping, hat: S.xmas, coat: COAT
+        hop: cat.hop, sleeping: cat.sleeping, peek: cat.peek, hat: S.xmas, coat: COAT
       });
       if (r) cat.top = (r.top * CS) / DPR;
       sctx.setTransform(ART, 0, 0, ART, 0, 0);
@@ -1107,6 +1332,7 @@
     if (S.xmas && decor) decor.tick(now);
     if (now - (S.lastDress || 0) > 250) { S.lastDress = now; dressTeam(S.xmas ? 'wear' : 'prepare'); }
     const people = readPeople();
+    updatePeek(people, dt);
     updateWeather(dt);
     mirrorFog();
     render(people);

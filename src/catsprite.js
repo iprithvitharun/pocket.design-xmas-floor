@@ -9,7 +9,8 @@
    point of the head (or hat), relative to y, in cat pixels.
 
    opt: dir 'down'|'up'|'left'|'right', walk, phase (radians, one stride per 2π), idle (seconds
-   standing still), time (seconds, for idle tail and breathing), blink, hop, sleeping, hat, coat. */
+   standing still), time (seconds, for idle tail and breathing), blink, hop, sleeping, hat, coat,
+   peek (while sleeping: -1 or 1 opens one eye, looking left or right on screen). */
 (function (root) {
   'use strict';
 
@@ -399,7 +400,10 @@
     d.ell(8.3, -8.5, 2.4, 1.7, 'cream'); d.ell(11.7, -8.5, 2.4, 1.7, 'cream');
     d.px(9, -18, 2, 3, 'stripe'); d.px(7, -17, 1, 2, 'stripe'); d.px(12, -17, 1, 2, 'stripe');
     d.px(2, -11, 2, 1, 'stripe'); d.px(16, -11, 2, 1, 'stripe');
-    d.px(6, -12, 3, 1, 'line'); d.px(12, -12, 3, 1, 'line');
+    d.px(6, -12, 3, 1, 'line');
+    // one eye opens to check on whoever is walking past; the pupil looks their way
+    if (o.peek) { d.px(12, -14, 3, 1, 'line'); d.px(12, -13, 3, 2, 'iris'); d.px(13 + o.peek, -13, 1, 2, 'pupil'); }
+    else d.px(12, -12, 3, 1, 'line');
     d.px(9, -10, 2, 1, 'nose');
     let top = -23.5;
     if (o.hat) top = Math.min(top, hat(d, 10, -18, -1));
@@ -508,10 +512,12 @@
     else sw = SWAY[Math.floor(time * 2.2) % SWAY.length];
     const blink = opt.blink > 0 && pose !== 'sleep' ? 1 : 0;
     const hatOn = opt.hat ? 1 : 0;
-    const key = [P.sig, pose, view, f, sw, breath, blink, hatOn].join('|');
+    // peek is given on screen; a cat facing left is drawn flipped, so its eyes look the other way
+    const peek = pose === 'sleep' ? Math.sign(Number(opt.peek) || 0) * (dir === 'left' ? -1 : 1) : 0;
+    const key = [P.sig, pose, view, f, sw, breath, blink, hatOn, peek].join('|');
     let fr = cache.get(key);
     if (!fr) {
-      fr = build(P, pose, view, { t: pose === 'walk' ? f / 8 : null, sw, breath, blink, hat: !!hatOn });
+      fr = build(P, pose, view, { t: pose === 'walk' ? f / 8 : null, sw, breath, blink, hat: !!hatOn, peek });
       cache.set(key, fr);
       if (cache.size > 320) cache.delete(cache.keys().next().value);
     }
@@ -526,7 +532,7 @@
     } else {
       ctx.drawImage(fr.canvas, x - OX, y - OY - hop);
     }
-    if (pose === 'sleep') zzz(ctx, x, y, time);
+    if (pose === 'sleep' && !peek) zzz(ctx, x, y, time);
     return { top: fr.top - hop };
   }
 

@@ -24,9 +24,11 @@ After you change any file, click the reload icon on the extension's card in `chr
 | Send a score to the leaderboard | Enter, type a name, Enter again (Esc goes back) | X, then A sends your saved name |
 | Ride the elevator | Walk onto the doormat | Walk onto the doormat |
 
-When you stop, the cat sits down. Leave it for a while and it curls up for a nap. Any key wakes it up.
+When you stop, the cat sits down. Leave it for about 9 seconds and it yawns and walks off to the warmest spot it can reach: the nearest diyas on the floor on Floor 1, the foot of the tree on Floor 2. It finds its way round the hiring card and the furniture and never steps on the doormat. There it curls up, and when someone walks past it opens one eye to watch them. Any key wakes it up, and moving takes over straight away.
 
 ## What happens
+
+The cat walks round the furniture rather than through it: sofas, tables, chairs, the desk, plants, lamps, the pets and the low front walls (and the tree on Floor 2). Rugs, the rangoli and the floor signs are floor, so it walks over those.
 
 **Floor 1** is the page as Pocket FM shipped it. The office starts hidden under a cream "fog" that clears wherever your cursor goes. The cat clears it too, in the same blocky tiles.
 
@@ -61,6 +63,7 @@ The cabinet is pixel art all the way through: marquee, bezel, screen, control pa
 - **Decor in the page's own layer.** The page labels its festival decor (`data-skin-decor="toran-left"`, `"diya-work"` and so on). Each piece gets a Christmas counterpart through CSS `content`, which replaces what an `<img>` shows. The page keeps its own layout and layering, so the arcade still stands in front of the garland and people still walk in front of the candles. Flames and bulbs flicker by cycling a few frames.
 - **Winter wardrobe.** `wardrobe.js` reads each teammate's own sprite images in your browser. It finds the face (and from it the skin tone), the neck, the top they're wearing, bare arms, hands and legs, and repaints them, keeping the original shading. It works per view (front, side, back) so the scarf stays put while someone walks. The work runs in background workers and starts as soon as the cat is in, so most people are dressed by the time the doors open. Walking sheets are swapped through `background-image`, seated poses through CSS `content`.
 - **Arcade.** The rules (`arcade-sim.js`) advance in fixed 1/60 s steps from a seeded random number generator and use only arithmetic that gives the same result in every JavaScript engine. So a round is fully described by its seed and the left/right/still move of each step (2 bits a step, about 800 characters for a full round). The art (`arcade-art.js`) draws the whole cabinet into a 276×250 canvas at one canvas pixel per art pixel, and the page scales it by a whole number of device pixels with `image-rendering: pixelated`.
+- **Furniture.** Every piece of furniture on the page is an `<img>` the page tags as a prop. Each image is scanned once for its solid pixels and described as up to four stacked boxes that follow its shape (a wall and the post above it, a lamp's shade and its pole), taking the page's own `object-fit` and mirroring into account. Tall, narrow pieces such as plants only block at their base, so the cat can pass behind the leaves. The naps use the same boxes to find the shortest walk to the nearest warm spot.
 - **Top layer.** The elevator and the arcade open as manual popovers, so nothing on the page can stack above them. The everyday controls stay in the normal layer, so they never cover the page's own dialogs.
 
 ## Running the leaderboard
