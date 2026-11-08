@@ -1,0 +1,38 @@
+# After a score pull request is merged, rebuild leaderboard.json from leaderboard/runs/.
+# Every run is replayed again here, so a run edited by hand never reaches the board.
+# The extension reads leaderboard.json from raw.githubusercontent.com (cached for about 5 minutes).
+name: Rebuild the leaderboard
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'leaderboard/runs/**'
+      - 'src/arcade-sim.js'
+      - 'tools/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: leaderboard
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node tools/build-leaderboard.js
+      - name: Commit leaderboard.json
+        run: |
+          if git diff --quiet -- leaderboard.json; then echo "No change."; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add leaderboard.json
+          git commit -m "Update the leaderboard"
+          git push

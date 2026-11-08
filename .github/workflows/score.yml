@@ -1,0 +1,74 @@
+# A player sends a score from the arcade: it opens a "Score:" issue with the run in a JSON block.
+# This replays the run with the game's own rules (tools/take-submission.js). If the score checks out,
+# it opens a pull request that adds the run to leaderboard/runs/ and closes the issue when merged.
+# Otherwise it replies with the reason and closes the issue.
+#
+# Needs: Settings → Actions → General → Workflow permissions → "Allow GitHub Actions to create and
+# approve pull requests".
+name: Score from an issue
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: scores
+  cancel-in-progress: false
+
+jobs:
+  take:
+    if: startsWith(github.event.issue.title, 'Score:')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # The issue text is untrusted: it only ever reaches the script through env, never the shell.
+      - name: Replay the run
+        id: check
+        env:
+          BODY: ${{ github.event.issue.body }}
+          ISSUE: ${{ github.event.issue.number }}
+          AUTHOR: ${{ github.event.issue.user.login }}
+        run: node tools/take-submission.js
+
+      - name: Open a pull request
+        if: steps.check.outputs.ok == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+          TITLE: ${{ steps.check.outputs.title }}
+          FILE: ${{ steps.check.outputs.file }}
+          BASE: ${{ github.event.repository.default_branch }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "score/issue-$ISSUE"
+          git add -- "$FILE"
+          git commit -m "$TITLE"
+          git push origin "score/issue-$ISSUE"
+          gh pr create --base "$BASE" --title "$TITLE" \
+            --body "Closes #$ISSUE. The run replays to this score with the arcade's own rules. Merge to put it on the leaderboard."
+
+      # A good run's issue stays open until its pull request is merged; one that won't go on the
+      # board is answered and closed, so the issue list only holds scores waiting for review.
+      - name: Reply on the issue
+        if: always() && steps.check.outputs.message != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+          OK: ${{ steps.check.outputs.ok }}
+          MESSAGE: ${{ steps.check.outputs.message }}
+        run: |
+          if [ "$OK" = "true" ]; then
+            gh issue comment "$ISSUE" --body "$MESSAGE"
+          else
+            gh issue close "$ISSUE" --comment "$MESSAGE"
+          fi

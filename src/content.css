@@ -1,0 +1,256 @@
+/* Pocket Christmas Floor — overlay styles.
+   Colours and type are copied from the page's own buttons at runtime (see syncTheme in content.js),
+   so the controls look like they belong to the site. These are the fallbacks. */
+#pxf-fog,
+#pxf-sprites {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+/* the page sets `canvas { width: 100% }`; pin our sizes */
+#pxf-fog, #pxf-sprites { width: 100% !important; height: 100% !important; }
+#pxf-fog { z-index: 9999; transition: opacity 1.1s ease; }
+#pxf-sprites { z-index: 10002; image-rendering: pixelated; }
+
+#pxf-ui {
+  --pxf-bg: #fff8ea;
+  --pxf-ink: #2e2433;
+  --pxf-line: #5a3b28;
+  --pxf-radius: 4px;
+  --pxf-font: inherit;
+  --pxf-serif: Georgia, "Times New Roman", serif;
+  position: fixed;
+  inset: 0;
+  z-index: 10003;
+  pointer-events: none;
+  font-family: var(--pxf-font);
+  color: var(--pxf-ink);
+}
+/* The elevator and arcade open as manual popovers (top layer); undo the browser's popover box. */
+#pxf-arcade[popover],
+#pxf-elev[popover] {
+  position: fixed;
+  inset: 0;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  color: inherit;
+}
+#pxf-elev[popover] { background: transparent; }
+#pxf-arcade[popover]:popover-open { display: grid; }
+
+/* ---- launcher + HUD (bottom-right; the page owns bottom-left and top-right) ---- */
+.pxf-btn {
+  pointer-events: auto;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--pxf-ink);
+  background: var(--pxf-bg);
+  border: 1px solid var(--pxf-line);
+  border-radius: var(--pxf-radius);
+  box-shadow: 0 2px 0 rgba(46, 36, 51, 0.25);
+  padding: 9px 12px;
+  cursor: pointer;
+}
+.pxf-btn:hover { transform: translateY(-1px); }
+.pxf-btn:active { transform: translateY(1px); box-shadow: none; }
+.pxf-btn:focus-visible { outline: 2px solid #c8482f; outline-offset: 2px; }
+
+#pxf-launch {
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right, 0px));
+  bottom: 16px;
+}
+
+#pxf-hud {
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right, 0px));
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+#pxf-hud[hidden], #pxf-launch[hidden] { display: none !important; }
+.pxf-row { display: flex; gap: 8px; align-items: center; }
+.pxf-floor {
+  font-family: var(--pxf-serif);
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #ffe9b8;
+  background: #3a2418;
+  border: 1px solid #1f130c;
+  border-radius: var(--pxf-radius);
+  padding: 8px 11px;
+  box-shadow: inset 0 0 0 2px rgba(255, 210, 140, 0.15);
+}
+.pxf-floor b { color: #ffc857; font-weight: 700; }
+.pxf-chip {
+  font-size: 12px;
+  color: var(--pxf-ink);
+  background: var(--pxf-bg);
+  border: 1px solid var(--pxf-line);
+  border-radius: var(--pxf-radius);
+  padding: 8px 10px;
+  opacity: 0.9;
+}
+.pxf-help {
+  font-size: 12px;
+  line-height: 1.45;
+  max-width: 330px;
+  text-align: right;
+  color: var(--pxf-ink);
+  background: color-mix(in srgb, var(--pxf-bg) 92%, transparent);
+  border: 1px solid var(--pxf-line);
+  border-radius: var(--pxf-radius);
+  padding: 8px 10px;
+}
+.pxf-help kbd {
+  font: inherit;
+  font-size: 11px;
+  border: 1px solid var(--pxf-line);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  padding: 0 4px;
+  background: #fff;
+}
+
+/* ---- speech bubbles + prompts (match the page's own bubble: cream, serif) ---- */
+.pxf-bubble {
+  position: fixed;
+  transform: translate(-50%, -100%);
+  font-family: var(--pxf-serif);
+  font-size: 15px;
+  line-height: 1.25;
+  color: #2a1d12;
+  background: #fffdf7;
+  border: 2px solid #2e2433;
+  border-radius: 6px;
+  padding: 6px 10px;
+  white-space: nowrap;
+  box-shadow: 0 3px 0 rgba(46, 36, 51, 0.25);
+  animation: pxf-pop 0.18s ease-out;
+}
+.pxf-bubble::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -8px;
+  width: 10px;
+  height: 10px;
+  background: #fffdf7;
+  border-right: 2px solid #2e2433;
+  border-bottom: 2px solid #2e2433;
+  transform: translateX(-50%) rotate(45deg);
+}
+.pxf-prompt {
+  position: fixed;
+  transform: translate(-50%, -100%);
+  font-size: 12px;
+  color: #fffdf7;
+  background: rgba(46, 36, 51, 0.88);
+  border-radius: 999px;
+  padding: 5px 10px;
+  white-space: nowrap;
+}
+.pxf-prompt kbd { font: inherit; font-weight: 700; color: #ffc857; }
+@keyframes pxf-pop { from { transform: translate(-50%, -88%) scale(0.85); opacity: 0; } }
+
+/* ---- elevator transition ---- */
+#pxf-elev { position: fixed; inset: 0; pointer-events: none; }
+#pxf-elev .door {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50.5%;
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.05) 0 2px, transparent 2px 9px),
+    linear-gradient(180deg, #b98a4e, #8a5f31 55%, #6e4a25);
+  box-shadow: inset 0 0 0 6px #4a2f17, inset 0 0 0 9px #d7a960;
+  transition: transform 0.5s cubic-bezier(0.6, 0, 0.3, 1);
+}
+#pxf-elev .door.l { left: 0; transform: translateX(-101%); }
+#pxf-elev .door.r { right: 0; transform: translateX(101%); }
+#pxf-elev.shut .door { transform: translateX(0); }
+#pxf-elev .ind {
+  position: absolute;
+  left: 50%;
+  top: 18%;
+  transform: translateX(-50%);
+  font-family: var(--pxf-serif);
+  text-align: center;
+  color: #ffd27a;
+  background: #1c120b;
+  border: 3px solid #d7a960;
+  border-radius: 6px;
+  padding: 12px 22px;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  box-shadow: 0 0 30px rgba(255, 190, 90, 0.35);
+}
+#pxf-elev.shut .ind { opacity: 1; }
+#pxf-elev .ind .num { font-size: 44px; line-height: 1; letter-spacing: 0.05em; }
+#pxf-elev .ind .lbl { font-size: 13px; letter-spacing: 0.2em; text-transform: uppercase; margin-top: 6px; }
+#pxf-elev .ind .arrow { font-size: 14px; color: #ffb43c; }
+
+/* ---- arcade cabinet ---- */
+#pxf-arcade {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: auto;
+  background: rgba(20, 12, 24, 0.62);
+}
+#pxf-arcade .cab {
+  position: relative;
+  line-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  filter: drop-shadow(0 20px 40px rgba(0, 0, 0, 0.55));
+}
+/* The canvas is sized in JS to a whole number of device pixels per art pixel. */
+#pxf-arcade canvas {
+  display: block;
+  max-width: none;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
+}
+/* A real button over the EXIT button drawn on the cabinet. */
+#pxf-arcade .exit {
+  position: absolute;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  pointer-events: auto;
+}
+#pxf-arcade .exit:hover { background: rgba(255, 255, 255, 0.08); }
+#pxf-arcade .exit:focus-visible { outline: 2px solid #ffd27a; outline-offset: 2px; }
+.pxf-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #pxf-elev .door, #pxf-fog { transition: none; }
+  .pxf-bubble { animation: none; }
+}

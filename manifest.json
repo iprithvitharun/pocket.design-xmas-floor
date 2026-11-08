@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Pocket Christmas Floor",
+  "version": "0.2.0",
+  "description": "Fan-made overlay for pocket.design: drive a pixel cat around the office and take the elevator to a Christmas floor.",
+  "background": {
+    "service_worker": "src/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://pocket.design/*"],
+      "js": ["src/catsprite.js", "src/xmasprops.js", "src/wardrobe.js", "src/decor.js", "src/arcade-sim.js", "src/arcade-art.js", "src/content.js"],
+      "css": ["src/content.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}
