@@ -20,8 +20,11 @@
  * natural size is the fallback. New art is original pixel art on a grid of about 2.25 CSS px like the
  * page's own; the recoloured pieces keep the page's own shapes.
  *
- * window.pxfDecor.apply(on)  dress or undress the room
- * window.pxfDecor.tick(now)  advance twinkles and flames (call every frame while on Floor 2)
+ * Outside Diwali the page has no decor, so Floor 2 lays out the same slots itself (see SLOTS below).
+ *
+ * window.pxfDecor.apply(on)    dress or undress the room
+ * window.pxfDecor.tick(now)    advance twinkles and flames (call every frame while on Floor 2)
+ * window.pxfDecor.slotRect(id) where a slot sits on screen (the tree takes the rangoli's)
  */
 (function () {
   'use strict';
@@ -378,6 +381,161 @@
   const lifted = new Set();   // pet name tags moved up for the antlers
   let on = false, step = 0, lastStep = 0;
 
+  // ------------------------------------------------------------------ when the page has no festival decor
+  // Outside Diwali (5–11 Nov) the page shows its default office, with no decor and no data-floor-skin.
+  // Floor 2 then lays out the Diwali slots itself, from the same numbers the page uses: each piece
+  // sits on a prop ([data-floor-prop]) at a fraction of its box, sized in the page's 1672×890 units,
+  // with the page's layering (floor pieces by depth, 100 + 4y; table-top pieces just above their
+  // table). Christmas pieces fill those slots exactly as they fill the page's own images in season.
+  const stageOf = () => document.querySelector('main[data-floor-skin]') || document.querySelector('main[class*="_stage"]') || document.querySelector('main');
+  const CDN = 'https://djhonz7dexnot.cloudfront.net/';   // the page's own art, for pieces we recolour
+  const ART = {
+    'fairy-lights': '3af6a821d3e6e86f420c5529e250bcabf823a678',
+    'akash-kandil': '5d119d6216ea4a7c11d18eadcfb1b8fe5faee83b',
+    'flower-crown': 'f6f7a661e25c6f84491d77430fe4a8510441bc3e',
+    'marigold-collar': '9c63fbd1ce2c21ae6ea242e0f4c8772bb9b16302',
+    'pet-kurta': '39d6e35ddaffef71b1b7c980b85b5894059e3ebf'
+  };
+  const GLOW = {
+    lantern: { color: 'rgba(255, 128, 48, 0.42)', radius: 120 },
+    flame: { color: 'rgba(255, 176, 72, 0.5)', radius: 90 },
+    flames: { color: 'rgba(255, 168, 64, 0.55)', radius: 130 }
+  };
+  const SLOTS = [
+    { id: 'toran-left', at: [0.19, 0.006], pin: [0.5, 0], size: [440, 96], layer: 'wall', minWidth: 1000 },
+    { id: 'toran-right', at: [0.81, 0.006], pin: [0.5, 0], size: [440, 96], layer: 'wall', minWidth: 1000, flip: true },
+    { id: 'lights-left', art: 'fairy-lights', at: [0, 0], pin: [0, 0], size: [150, 140], layer: 'ceiling' },
+    { id: 'lights-right', art: 'fairy-lights', at: [1, 0], pin: [1, 0], size: [150, 140], layer: 'ceiling', flip: true },
+    { id: 'kandil-left', art: 'akash-kandil', at: [0.115, 0], pin: [0.5, 0], size: [62, 86], layer: 'ceiling', motion: 'sway', glow: 'lantern' },
+    { id: 'kandil-right', art: 'akash-kandil', at: [0.905, 0], pin: [0.5, 0], size: [54, 76], layer: 'ceiling', motion: 'sway', glow: 'lantern' },
+    { id: 'rangoli', on: 'entry-plant-left', at: [1.16, -0.51], pin: [0.5, 0.5], size: [150, 92], layer: 'rug', slotOnly: true },   // the tree stands here
+    { id: 'diyas-sofa', on: 'left-sofa', at: [-0.12, 1], size: [74, 47], layer: 'floor', glow: 'flames' },
+    { id: 'diya-reading', on: 'right-sofa', at: [-0.08, 1.04], size: [34, 27], layer: 'floor', glow: 'flame' },
+    { id: 'diya-entry-left', on: 'entrance-plant--1', at: [-0.42, 1], size: [36, 29], layer: 'floor', glow: 'flame' },
+    { id: 'diya-entry-right', on: 'entrance-plant-1', at: [1.42, 1], size: [36, 29], layer: 'floor', glow: 'flame', flip: true },
+    { id: 'diyas-beanbag', on: 'left-beanbag', at: [1.6, 1], size: [70, 44], layer: 'floor', glow: 'flames' },
+    { id: 'diyas-lounge', on: 'lounge-table', at: [0.42, 0.58], size: [48, 32], layer: 'over', glow: 'flames' },
+    { id: 'diya-work', on: 'long-table', at: [0.1, 0.5], size: [32, 26], layer: 'over', glow: 'flame' },
+    { id: 'sweets', on: 'reading-table', at: [0.24, 0.6], size: [40, 44], layer: 'over' },
+    { id: 'coco-crown', on: 'pet-coco', at: [0.6, 0.36], size: [40, 26], layer: 'over', rotate: -8 },
+    { id: 'goldie-kurta', art: 'pet-kurta', on: 'pet-goldie', at: [0.4, 0.74], size: [24, 30], layer: 'over' },
+    { id: 'evie-crown', art: 'flower-crown', on: 'pet-leafy', at: [0.42, 0.36], size: [28, 18], layer: 'over' },
+    { id: 'zima-collar', art: 'marigold-collar', on: 'sofa-cat', at: [0.24, 0.56], size: [24, 16], layer: 'over', rotate: -18 }
+  ];
+  const LAYER_Z = { rug: 99, wall: 3, ceiling: 9002, air: 9005 };
+  const depthZ = y => Math.min(8990, 100 + Math.max(0, Math.round(4 * y)));
+  const BLANK = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+  const ghosts = new Map();   // slot id -> { img, glow }
+  let night = null;
+  // the page's own class names for decor, glows and the evening tint, so its animations apply too
+  let cls = null;
+  function pageClasses() {
+    if (cls) return cls;
+    cls = {};
+    for (const ss of document.styleSheets) {
+      let rules; try { rules = ss.cssRules; } catch (e) { continue; }
+      for (const r of rules) {
+        const m = r.selectorText && r.selectorText.match(/^\.([\w-]+_(decor|glow|night))$/);
+        if (m) cls[m[2]] = m[1];
+      }
+    }
+    return cls;
+  }
+
+  // where a slot lands, in the coordinates of the layer the props live in
+  function place(slot, host, W, H) {
+    if (slot.minWidth && W < slot.minWidth) return null;
+    const n = Math.min(W / 1672, H / 890);
+    let box = { x: 0, y: 0, width: W, height: H }, anchor = null;
+    if (slot.on) {
+      anchor = host.querySelector(`[data-floor-prop="${slot.on}"]`);
+      if (!anchor) return null;
+      const s = anchor.style;
+      if (s.left && s.top && s.width && s.height) box = { x: parseFloat(s.left), y: parseFloat(s.top), width: parseFloat(s.width), height: parseFloat(s.height) };
+      else {
+        const hr = host.getBoundingClientRect(), r = anchor.getBoundingClientRect();
+        box = { x: r.left - hr.left, y: r.top - hr.top, width: r.width, height: r.height };
+      }
+    }
+    const w = slot.size[0] * n, h = slot.size[1] * n, [px, py] = slot.pin || [0.5, 1];
+    const fx = box.x + box.width * slot.at[0], fy = box.y + box.height * slot.at[1];
+    const z = slot.layer === 'floor' ? depthZ(fy)
+      : slot.layer === 'over' ? (parseInt(anchor && getComputedStyle(anchor).zIndex, 10) || depthZ(box.y + box.height)) + 1
+      : LAYER_Z[slot.layer];
+    return { x: fx - w * px, y: fy - h * py, w, h, z, footX: fx, glowR: slot.glow ? GLOW[slot.glow].radius * n : 0 };
+  }
+  const propLayer = stage => { const p = stage.querySelector('[data-floor-prop]'); return p ? p.parentElement : stage; };
+
+  // the page's own decor, if it's in season
+  const pageHasDecor = stage => !!stage.querySelector('img[data-skin-decor]:not([data-pxf-ghost])');
+
+  function layoutGhosts(stage) {
+    const host = propLayer(stage), W = stage.clientWidth, H = stage.clientHeight, c = pageClasses();
+    if (!night && !stage.querySelector('[class*="_night"]')) {
+      night = document.createElement('div');
+      night.dataset.pxfGhost = '1';
+      night.setAttribute('aria-hidden', 'true');
+      if (c.night) night.className = c.night;
+      else {
+        night.style.cssText = 'position:absolute;inset:0;z-index:9003;pointer-events:none;background:var(--skin-night,transparent);mix-blend-mode:multiply';
+        const edge = document.createElement('div');
+        edge.style.cssText = 'position:absolute;inset:0;background:radial-gradient(ellipse 75% 70% at 50% 46%,transparent 45%,var(--skin-night-edge,transparent) 100%)';
+        night.appendChild(edge);
+      }
+      host.appendChild(night);
+    }
+    SLOTS.forEach((slot, i) => {
+      if (slot.slotOnly) return;
+      const at = place(slot, host, W, H);
+      let g = ghosts.get(slot.id);
+      if (!at) { if (g) { g.img.remove(); if (g.glow) g.glow.remove(); ghosts.delete(slot.id); } return; }
+      if (!g) {
+        const img = document.createElement('img');
+        img.alt = ''; img.draggable = false; img.setAttribute('aria-hidden', 'true');
+        img.dataset.pxfGhost = '1'; img.dataset.skinDecor = slot.id; img.dataset.layer = slot.layer;
+        if (slot.motion) img.dataset.motion = slot.motion;
+        if (c.decor) img.className = c.decor;
+        img.src = slot.art ? CDN + ART[slot.art] + '.webp' : BLANK;
+        const [px, py] = slot.pin || [0.5, 1];
+        img.style.cssText = `position:absolute;pointer-events:none;object-fit:contain;--flip:${slot.flip ? -1 : 1};--rotate:${slot.rotate || 0}deg;--delay:${-(0.53 * i)}s;` +
+          `transform:rotate(var(--rotate)) scaleX(var(--flip));transform-origin:${px * 100}% ${py * 100}%;` +
+          (/^(floor|over)$/.test(slot.layer) ? 'filter:drop-shadow(rgba(40,22,30,.28) 0 3px 2px);' : '');
+        let glow = null;
+        if (slot.glow) {
+          glow = document.createElement('span');
+          glow.dataset.pxfGhost = '1'; glow.setAttribute('aria-hidden', 'true');
+          if (c.glow) glow.className = c.glow;
+          glow.style.cssText = `position:absolute;pointer-events:none;z-index:9004;border-radius:50%;mix-blend-mode:screen;--glow:${GLOW[slot.glow].color};--delay:${-(0.37 * i)}s;` +
+            'background:radial-gradient(circle,var(--glow) 0%,transparent 68%)';
+          host.appendChild(glow);
+        }
+        host.appendChild(img);
+        g = { img, glow };
+        ghosts.set(slot.id, g);
+      }
+      const s = g.img.style;
+      s.left = `${at.x}px`; s.top = `${at.y}px`; s.width = `${at.w}px`; s.height = `${at.h}px`; s.zIndex = at.z;
+      if (g.glow) {
+        const gs = g.glow.style;
+        gs.left = `${at.footX - at.glowR}px`; gs.top = `${at.y + at.h / 2 - at.glowR}px`; gs.width = gs.height = `${2 * at.glowR}px`;
+      }
+    });
+  }
+  function removeGhosts() {
+    for (const g of ghosts.values()) { g.img.remove(); if (g.glow) g.glow.remove(); }
+    ghosts.clear();
+    if (night) { night.remove(); night = null; }
+  }
+  // a slot's box on screen (the tree uses the rangoli's), whether or not anything is drawn there
+  function slotRect(id) {
+    const stage = stageOf(), slot = SLOTS.find(s => s.id === id);
+    if (!stage || !slot) return null;
+    const host = propLayer(stage), at = place(slot, host, stage.clientWidth, stage.clientHeight);
+    if (!at) return null;
+    const hr = host.getBoundingClientRect();
+    return { left: hr.left + at.x, top: hr.top + at.y, width: at.w, height: at.h };
+  }
+
   function urlsFor(piece, cssW, cssH, img) {
     if (piece.recolour) {
       const src = img.currentSrc || img.src, key = 'r ' + src;
@@ -399,14 +557,16 @@
 
   function apply(next) {
     on = next;
-    const stage = document.querySelector('main[data-floor-skin]');
+    const stage = stageOf();
     if (!stage) return;
     if (!on) {
       for (const img of dressed) { img.style.content = ''; img.style.translate = ''; }
       for (const tag of lifted) tag.style.translate = '';
       dressed.clear(); lifted.clear();
+      removeGhosts();
       return;
     }
+    if (ghosts.size || !pageHasDecor(stage)) layoutGhosts(stage);
     for (const img of stage.querySelectorAll('img')) {
       if (/^(rangoli|sparkler)/.test(img.dataset.skinDecor || '')) continue; // hidden; the tree stands there
       const piece = pieceFor(img);
@@ -437,5 +597,5 @@
     apply(true);
   }
 
-  window.pxfDecor = { apply, tick };
+  window.pxfDecor = { apply, tick, slotRect };
 })();

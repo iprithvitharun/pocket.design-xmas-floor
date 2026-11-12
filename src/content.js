@@ -91,7 +91,13 @@
   const rand = (a, b) => a + Math.random() * (b - a);
   const pick = arr => arr[(Math.random() * arr.length) | 0];
   const $ = (s, r = document) => r.querySelector(s);
-  const stageEl = () => $('main[data-floor-skin]');
+  // the office; it carries data-floor-skin only while a festival skin is on (Halloween, Diwali)
+  const stageEl = () => $('main[data-floor-skin]') || $('main[class*="_stage"]') || $('main');
+  // Floor 1 goes by the page's own festival (Diwali, Halloween), or just "Office" between festivals
+  const floor1Name = () => {
+    const s = S.xmas ? saved.skin : stageEl() && stageEl().dataset.floorSkin;
+    return s ? s[0].toUpperCase() + s.slice(1) : 'Office';
+  };
   const pageFog = () => $('canvas[class*="_surface"]');
   const toRect = r => ({ x: r.left, y: r.top, w: r.width, h: r.height });
   const inflate = (r, d) => ({ x: r.x - d, y: r.y - d, w: r.w + 2 * d, h: r.h + 2 * d });
@@ -120,7 +126,7 @@
         <span class="pxf-chip" id="pxf-pad">⌨︎ Keyboard</span>
         <button class="pxf-btn" id="pxf-sound" type="button" aria-pressed="true">Sound on</button>
         <button class="pxf-btn" id="pxf-home" type="button">Send the cat home</button>
-        <span class="pxf-floor" id="pxf-floor">Floor <b>1</b> · Diwali</span>
+        <span class="pxf-floor" id="pxf-floor">Floor <b>1</b> · ${floor1Name()}</span>
       </div>
     </div>
     <div class="pxf-prompt" id="pxf-prompt" hidden></div>`;
@@ -181,7 +187,12 @@
     // (data-skin-decor="rangoli", with sparklers beside it); the size search is the fallback.
     const labelled = $('img[data-skin-decor="rangoli"]');
     let rg = labelled ? { el: labelled, r: labelled.getBoundingClientRect() } : null;
-    if (!rg) {
+    // out of season there's no rangoli, so the tree takes the spot the page would put it in
+    const slot = !rg && window.pxfDecor && window.pxfDecor.slotRect ? window.pxfDecor.slotRect('rangoli') : null;
+    if (slot) {
+      A.tree = { x: slot.left + slot.width / 2, y: slot.top + slot.height * 0.78 };
+      A.rangoliEls = [];
+    } else if (!rg) {
       for (const it of imgs) {
         const r = it.r;
         if (r.width < 125 || r.width > 200 || r.height < 70 || r.height > 125) continue;
@@ -197,7 +208,7 @@
       const sparklers = [...document.querySelectorAll('img[data-skin-decor^="sparkler"]')];
       A.rangoliEls = [rg.el, ...(sparklers.length ? sparklers : imgs.filter(o => o.el !== rg.el && o.r.width < 50 && o.r.height > 45 && o.r.height < 80 &&
         Math.hypot(o.r.left + o.r.width / 2 - c.x, o.r.top + o.r.height / 2 - c.y) < 110).map(o => o.el))];
-    } else {
+    } else if (!slot) {
       A.tree = { x: A.rawCard.x - 100, y: A.rawCard.y + A.rawCard.h * 0.82 };
       A.rangoliEls = [];
     }
@@ -603,7 +614,7 @@
       S.xmas = false;
       if (st && saved.mainStyle !== null) {
         if (saved.mainStyle) st.setAttribute('style', saved.mainStyle); else st.removeAttribute('style');
-        if (saved.skin) st.dataset.floorSkin = saved.skin;
+        if (saved.skin) st.dataset.floorSkin = saved.skin; else delete st.dataset.floorSkin;
       }
       saved.mainStyle = null;
       if (saved.floor) document.documentElement.dataset.pawFloor = saved.floor;
@@ -616,7 +627,7 @@
       if (decor) decor.apply(false);
       fog.style.opacity = '1';
       gusts.length = 0; prints.length = 0;
-      floorLbl.innerHTML = 'Floor <b>1</b> · Diwali';
+      floorLbl.innerHTML = `Floor <b>1</b> · ${floor1Name()}`;
     }
   }
 
@@ -907,7 +918,7 @@
     const el = document.createElement('div');
     el.id = 'pxf-elev';
     el.innerHTML = `<div class="door l"></div><div class="door r"></div>
-      <div class="ind"><div class="arrow">${to === 2 ? '▲' : '▼'}</div><div class="num">${S.xmas ? 2 : 1}</div><div class="lbl">${S.xmas ? 'Christmas' : 'Diwali'}</div></div>`;
+      <div class="ind"><div class="arrow">${to === 2 ? '▲' : '▼'}</div><div class="num">${S.xmas ? 2 : 1}</div><div class="lbl">${S.xmas ? 'Christmas' : floor1Name()}</div></div>`;
     ui.appendChild(el);
     topLayer(el);
     const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -916,7 +927,7 @@
     setTimeout(() => {
       sfx.ding();
       $('.num', el).textContent = String(to);
-      $('.lbl', el).textContent = to === 2 ? 'Christmas' : 'Diwali';
+      $('.lbl', el).textContent = to === 2 ? 'Christmas' : floor1Name();
     }, 650 * T);
     setTimeout(() => {
       applyXmas(to === 2);
@@ -1132,8 +1143,10 @@
       const fitK = Math.floor(Math.min(((innerWidth - 32) * dpr) / W, ((innerHeight - 64) * dpr) / H));
       const k = Math.max(1, Math.min(fitK, Math.floor(4 * dpr))); // at most 4 CSS px per art pixel
       const u = k / dpr;
-      this.cv.style.width = `${W * u}px`;
-      this.cv.style.height = `${H * u}px`;
+      // the page sets `canvas { width: 100% !important; height: 100% !important }`, which beats a
+      // plain inline size and leaves the cabinet at 1 CSS px per art pixel
+      this.cv.style.setProperty('width', `${W * u}px`, 'important');
+      this.cv.style.setProperty('height', `${H * u}px`, 'important');
       Object.assign(this.exitBtn.style, { left: `${exit.x * u}px`, top: `${exit.y * u}px`, width: `${exit.w * u}px`, height: `${exit.h * u}px` });
     }
     say(msg) { this.live.textContent = msg; }
