@@ -6,13 +6,20 @@ It only draws on top of the page in your own browser, and nothing on Pocket FM's
 
 ## Install
 
-1. Open `chrome://extensions` in Chrome.
-2. Turn on **Developer mode** (top right).
-3. Click **Load unpacked** and choose this folder (`pocket-xmas-floor`).
-4. Open or reload https://pocket.design.
-5. Click **🐾 Bring the cat in** in the bottom-right corner.
+You need Google Chrome on a computer. There's nothing to build and no dependencies.
+
+1. Get the code: run `git clone https://github.com/iprithvitharun/pocket.design-xmas-floor.git`, or on GitHub click **Code → Download ZIP** and unzip it.
+2. Type `chrome://extensions` into Chrome's address bar.
+3. Turn on **Developer mode** (top right).
+4. Click **Load unpacked** and choose the folder with `manifest.json` in it: `pocket.design-xmas-floor` if you cloned it, `pocket.design-xmas-floor-main` if you downloaded the ZIP.
+5. Open or reload https://pocket.design.
+6. Click **🐾 Bring the cat in** in the bottom-right corner.
 
 After you change any file, click the reload icon on the extension's card in `chrome://extensions` and reload the page.
+
+**Setting this up with an AI agent?** Paste this repo's link into your coding agent and ask it to set it up.
+
+> Note for the agent: clone the repo; there is no build step. Chrome only lets a person load an unpacked extension, so don't try to install it from a script. Give the person steps 2–6 with the absolute path of the cloned folder filled in for step 4, then show them the Controls table below.
 
 ## Controls
 
