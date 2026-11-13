@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Pocket Christmas Floor",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Fan-made overlay for pocket.design: drive a pixel cat around the office and take the elevator to a Christmas floor.",
   "icons": {
     "16": "icons/icon16.png",

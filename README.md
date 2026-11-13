@@ -13,7 +13,7 @@ You need Google Chrome on a computer. There's nothing to build and no dependenci
 3. Turn on **Developer mode** (top right).
 4. Click **Load unpacked** and choose the folder with `manifest.json` in it: `pocket.design-xmas-floor` if you cloned it, `pocket.design-xmas-floor-main` if you downloaded the ZIP.
 5. Open or reload https://pocket.design.
-6. Click **🐾 Bring the cat in** in the bottom-right corner.
+6. The cat walks in on its own. If you send it home, **🐾 Bring the cat in** (bottom right) brings it back.
 
 After you change any file, click the reload icon on the extension's card in `chrome://extensions` and reload the page.
 

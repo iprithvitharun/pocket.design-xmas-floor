@@ -4,7 +4,7 @@
  * A fan-made overlay. It only draws on top of the page in your own browser and
  * never sends anything anywhere.
  *
- *  - Bring in an original pixel cat and drive it with WASD / arrows or a game controller.
+ *  - An original pixel cat comes in when the page loads; drive it with WASD / arrows or a game controller.
  *  - The page hides its floor under a "fog" canvas that clears where your cursor goes.
  *    We mirror that canvas and cut the cat's path out of it, so the cat clears the floor too.
  *  - The doormat is an elevator. Step on it to ride between Floor 1 (the page as shipped)
@@ -469,6 +469,13 @@
   // ---------------------------------------------------------------- sound
   let ac = null;
   function ensureAudio() { if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { ac = null; } } }
+  // Browsers only allow sound after the person has clicked or pressed a key on the page. The cat comes
+  // in on its own, so the sound starts with the first click or key press instead.
+  function wakeAudio() {
+    if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return;
+    ensureAudio();
+    if (ac && ac.state === 'suspended') ac.resume().catch(() => {});
+  }
   function tone(freq, dur, type = 'square', vol = 0.05, to = null, delay = 0) {
     if (!S.sound || !ac) return;
     try {
@@ -1358,8 +1365,9 @@
   }
 
   function activate() {
-    ensureAudio();
-    if (ac && ac.state === 'suspended') ac.resume();
+    if (S.active) return;
+    clearTimeout(S.autoT);
+    wakeAudio();
     syncTheme();
     S.active = true;
     launchBtn.hidden = true;
@@ -1393,11 +1401,25 @@
   window.addEventListener('keyup', onKeyUp, true);
   window.addEventListener('blur', clearKeys);
   window.addEventListener('resize', () => { locate(); if (S.xmas) initSnow(); });
+  window.addEventListener('pointerdown', wakeAudio, true);
+  window.addEventListener('keydown', wakeAudio, true);
+
+  // The cat comes in on its own once the office is on the page (the hiring card and the doormat), after
+  // a moment for the layout to settle. "Send the cat home" still works, and the button brings it back.
+  function autoStart(tries = 0) {
+    if (S.active) return;
+    if (!($('.office-hiring') && $('[class*="_mark_mat"]')) && tries < 40) { S.autoT = setTimeout(() => autoStart(tries + 1), 250); return; }
+    S.autoT = setTimeout(activate, 600);
+  }
+  autoStart();
   syncTheme();
   S.raf = requestAnimationFrame(frame);
 
   window.__pocketXmasFloor = {
     teardown() {
+      clearTimeout(S.autoT);
+      window.removeEventListener('pointerdown', wakeAudio, true);
+      window.removeEventListener('keydown', wakeAudio, true);
       deactivate();
       cancelAnimationFrame(S.raf);
       window.removeEventListener('keydown', onKeyDown, true);
