@@ -550,26 +550,32 @@
     panel(c, 28, 16, 184, 82, P);
     text(c, o.out ? 'OUT OF LIVES' : "TIME'S UP", SW / 2, 21, P.title, { scale: 2, align: 'center', shadow: P.shadow });
     text(c, 'SCORE ' + o.score, SW / 2, 40, P.ink, { align: 'center' });
-    if (o.newBest) { if (blink) text(c, 'NEW BEST!', SW / 2, 49, P.green, { align: 'center' }); }
-    else text(c, 'BEST ' + v.best, SW / 2, 49, P.muted, { align: 'center' });
     // where this round would land on the board, or the best you already have there
     const where = o.rank === 0 ? ['NEW TOP SCORE!', P.gold] : o.rank > 0 ? ['WOULD RANK #' + (o.rank + 1), P.gold]
       : o.behind ? ['YOUR BOARD BEST ' + o.behind, P.muted] : null;
+    if (where && (o.phase === 'offer' || o.phase === 'name')) text(c, where[0], SW / 2, 49, where[1], { align: 'center' });
+    else if (o.newBest) { if (blink) text(c, 'NEW BEST!', SW / 2, 49, P.green, { align: 'center' }); }
+    else text(c, 'BEST ' + v.best, SW / 2, 49, P.muted, { align: 'center' });
     if (o.phase === 'offer') {
-      if (where) text(c, where[0], SW / 2, 60, where[1], { align: 'center' });
-      // below your own board best it would change nothing, so the offer steps back
-      if (o.behind) text(c, 'ENTER TO SEND ANYWAY', SW / 2, 72, P.muted, { align: 'center' });
-      else text(c, 'ENTER TO SEND SCORE', SW / 2, 72, P.ink, { align: 'center' });
-      if (blink) text(c, 'SPACE TO PLAY AGAIN', SW / 2, 87, P.gold, { align: 'center' });
+      if (o.behind) {
+        // below your own board best it would change nothing, so the question steps back
+        text(c, 'ENTER TO SEND ANYWAY', SW / 2, 64, P.muted, { align: 'center' });
+        if (blink) text(c, 'SPACE TO PLAY AGAIN', SW / 2, 87, P.gold, { align: 'center' });
+      } else {
+        // the round is over: ask straight away
+        text(c, 'ADD IT TO THE LEADERBOARD?', SW / 2, 61, P.gold, { align: 'center' });
+        text(c, 'ENTER: YES · SPACE: PLAY AGAIN', SW / 2, 72, P.ink, { align: 'center' });
+        text(c, 'IT OPENS A GITHUB ISSUE', SW / 2, 87, P.muted, { align: 'center' });
+      }
     } else if (o.phase === 'name') {
-      text(c, where ? where[0] : 'SEND YOUR SCORE', SW / 2, 60, where ? where[1] : P.gold, { align: 'center' });
+      text(c, 'TYPE YOUR NAME', SW / 2, 60, P.gold, { align: 'center' });
       const bw = 66, lw = measure('NAME'), x0 = Math.round(SW / 2 - (lw + 5 + bw) / 2);
       text(c, 'NAME', x0, 73, P.muted);
       const bx = x0 + lw + 5;
       px(c, bx, 70, bw, 13, P.edge); px(c, bx + 1, 71, bw - 2, 11, P.field);
       const nw = text(c, o.name, bx + 3, 73, P.ink);
       if (blink && o.name.length < 10) text(c, '_', bx + 3 + nw + (o.name ? 1 : 0), 73, P.gold);
-      text(c, 'ENTER SEND  ESC BACK', SW / 2, 87, P.muted, { align: 'center' });
+      text(c, 'ENTER: OPEN GITHUB · ESC: BACK', SW / 2, 87, P.muted, { align: 'center' });
     } else if (o.phase === 'sending') {
       text(c, 'OPENING GITHUB...', SW / 2, 68, P.ink, { align: 'center' });
     } else if (o.phase === 'sent') {
@@ -580,7 +586,8 @@
       text(c, "COULDN'T OPEN GITHUB", SW / 2, 66, P.red, { align: 'center' });
       if (blink) text(c, 'SPACE TO PLAY AGAIN', SW / 2, 87, P.muted, { align: 'center' });
     } else {
-      if (o.listed && o.score === 0) text(c, 'CATCH ONE TO SEND A SCORE', SW / 2, 64, P.muted, { align: 'center' });
+      if (o.stale && o.score > 0) text(c, 'RELOAD THE PAGE TO SEND', SW / 2, 64, P.muted, { align: 'center' });
+      else if (o.listed && o.score === 0) text(c, 'CATCH ONE TO SEND A SCORE', SW / 2, 64, P.muted, { align: 'center' });
       if (blink) text(c, 'SPACE TO PLAY AGAIN', SW / 2, 87, P.gold, { align: 'center' });
     }
   }

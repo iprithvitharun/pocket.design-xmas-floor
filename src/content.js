@@ -1248,18 +1248,20 @@
       const s = this.sim, score = s.score;
       const newBest = score > this.best;
       if (newBest) { this.best = score; store.set('pxf:best:' + this.game, String(score)); }
-      // Any score of 1 or more can go to the leaderboard. The arcade offers it only once it has read
-      // leaderboard.json, which also proves the repo is there.
-      const listed = (BOARD.status === 'ok' || BOARD.status === 'cached') && !!BOARD.games && !!runtime();
-      const offer = listed && score > 0;
-      const rows = listed ? BOARD.games[this.game] || [] : [];
+      // Any score of 1 or more can go to the leaderboard, so the arcade asks as soon as the round ends.
+      // The board, once it has loaded, only adds where the score would land. If the extension was
+      // reloaded under this page, its runtime is gone and nothing can be sent until the page reloads.
+      const canSend = !!runtime();
+      const offer = canSend && score > 0;
+      const known = (BOARD.status === 'ok' || BOARD.status === 'cached') && !!BOARD.games;
+      const rows = known ? BOARD.games[this.game] || [] : [];
       // The board keeps each player's best. If your name already has an equal or better score, this
       // round wouldn't move you; otherwise say where it would land (ignoring your own older row).
       const mine = rows.find(r => r.name === this.name);
       const behind = offer && mine && mine.score >= score ? mine.score : 0;
       const others = rows.filter(r => r !== mine);
       let rank = -1;
-      if (offer && !behind) {
+      if (offer && known && !behind) {
         rank = others.findIndex(r => score > r.score);
         if (rank < 0) rank = rows.length >= BOARD_MAX ? -1 : others.length; // below a full board: unknown
       }
@@ -1267,7 +1269,7 @@
       this.state = 'over';
       this.overAt = this.t;
       this.over = {
-        score, out: s.lives <= 0, newBest, rank, behind, listed,
+        score, out: s.lives <= 0, newBest, rank, behind, listed: canSend, stale: !canSend,
         phase: offer ? 'offer' : 'plain',
         name: this.name,
         run: { v: 1, rules: SIM.RULES, game: this.game, score, seed: s.seed, steps: s.t, moves: SIM.encode(this.moves) }
@@ -1275,18 +1277,20 @@
       sfx.over(newBest || (rank >= 0 && rank < 3));
       const where = rank === 0 ? ' That would be the top score.' : rank > 0 ? ` That would rank number ${rank + 1}.` : '';
       this.say(offer
-        ? `Score ${score}.${newBest ? ' New best.' : ''}${where} Press Enter to send it to the leaderboard, or Space to play again.`
-        : `Score ${score}.${newBest ? ' New best.' : ''} Press Space to play again.`);
+        ? `Score ${score}.${newBest ? ' New best.' : ''}${where} Add it to the leaderboard? Press Enter for yes, or Space to play again. It opens a GitHub issue.`
+        : score > 0 && !canSend
+          ? `Score ${score}. Reload the page to send scores. Press Space to play again.`
+          : `Score ${score}.${newBest ? ' New best.' : ''} Press Space to play again.`);
     }
     // A moment after a round ends, so a key still held from the round doesn't skip the result.
     settled() { return !this.over || this.t - (this.overAt || 0) > 0.6; }
     ask() {
       this.over.phase = 'name';
-      this.say('Type a name, up to 10 letters, then press Enter to send. Escape goes back.');
+      this.say('Type your name, up to 10 letters, then press Enter to open GitHub. Escape goes back.');
     }
     back() {
       this.over.phase = 'offer';
-      this.say('Press Enter to send your score, or Space to play again.');
+      this.say('Add it to the leaderboard? Press Enter for yes, or Space to play again.');
     }
     submit() {
       const o = this.over;
@@ -1298,7 +1302,7 @@
       sendRun({ ...o.run, name }, ok => {
         if (S.arcade !== this || this.over !== o) return;
         o.phase = ok ? 'sent' : 'failed';
-        this.say(ok ? 'GitHub opened in a new tab. Press Create there to send your score.' : "Couldn't open GitHub. Press Space to play again.");
+        this.say(ok ? 'GitHub opened in a new tab. Press Create there to add your score.' : "Couldn't open GitHub. Press Space to play again.");
       });
     }
     draw() {

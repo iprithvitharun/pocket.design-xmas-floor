@@ -28,7 +28,7 @@ After you change any file, click the reload icon on the extension's card in `chr
 | Move | W A S D or arrow keys | Left stick or D-pad |
 | Say hi to someone / play the arcade | Space | A |
 | Leave the arcade | Esc, or click EXIT | B |
-| Send a score to the leaderboard | Enter, type a name, Enter again (Esc goes back) | X, then A sends your saved name |
+| Add your score to the leaderboard | When the round ends, Enter (yes), type a name, Enter again (Esc goes back) | X, then A sends your saved name |
 | Ride the elevator | Walk onto the doormat | Walk onto the doormat |
 
 When you stop, the cat sits down. Leave it for about 9 seconds and it yawns and walks off to the warmest spot it can reach: the nearest diyas on the floor on Floor 1, the foot of the tree on Floor 2. It finds its way round the hiring card and the furniture and never steps on the doormat. There it curls up, and when someone walks past it opens one eye to watch them. Any key wakes it up, and moving takes over straight away.
@@ -60,7 +60,7 @@ Walk up to the arcade cabinet in the top-left corner and press Space. Floor 1 ha
 
 The cabinet is pixel art all the way through: marquee, bezel, screen, control panel, the 5×7 font and the cat, all on one pixel grid. The joystick leans as you move and START dips when you press it.
 
-**Leaderboard.** The attract screen shows the top five, plus your own row if you're further down. Any round that scores 1 or more can be sent: the result screen says where it would rank, Enter asks for a name (up to 10 letters), and the game opens a pre-filled GitHub issue; press **Create** and you're done. A bot replays your round from its seed and your moves, and if the score matches and beats your best on the board, it opens a pull request. Once that's merged, your score is on the board for everyone who has the extension. You need a GitHub account to send a score.
+**Leaderboard.** The attract screen shows the top five, plus your own row if you're further down. When a round that scored 1 or more ends, the arcade asks if you want to add it to the leaderboard and says where it would rank. Press Enter for yes, type a name (up to 10 letters) and press Enter again: the game opens a pre-filled GitHub issue. Press **Create** and you're done. A bot replays your round from its seed and your moves, and if the score matches and beats your best on the board, it opens a pull request. Once that's merged, your score is on the board for everyone who has the extension. You need a GitHub account to send a score.
 
 ## How it works
 
@@ -82,7 +82,7 @@ The leaderboard is a GitHub repo with no server: issues in, pull requests to rev
 3. Players send scores from the arcade. For each "Score:" issue, `.github/workflows/score.yml` replays the run with `tools/take-submission.js`. A good run gets a pull request that adds `leaderboard/runs/<game>-<issue>.json`. A run that doesn't replay to its score, was sent before, or doesn't beat that player's best on the board gets a reply saying why, and the issue is closed.
 4. Merge the pull requests you're happy with. `.github/workflows/leaderboard.yml` replays every run again and rebuilds `leaderboard.json` (each player's best, the top 100 per game). The extension picks it up within a few minutes.
 
-To check runs by hand: `node tools/build-leaderboard.js`. The arcade only offers to send a score once it has read `leaderboard.json`, so nothing is sent before the repo exists.
+To check runs by hand: `node tools/build-leaderboard.js`.
 
 Replaying stops anyone from editing a score, the moves or the seed, and from sending the same round twice. It can't stop someone who writes a bot to play for them, so you're the last check: that's what reviewing the pull request is for.
 
